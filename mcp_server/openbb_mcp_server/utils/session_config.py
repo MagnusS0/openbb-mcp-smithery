@@ -196,6 +196,12 @@ class SessionConfigMiddleware(Middleware):  # type: ignore[misc]
         if request is not None:
             # Start with direct query params
             params: Dict[str, Any] = {k: v for k, v in request.query_params.items()}
+            # Smithery compatibility: allow generic api_key + profile
+            if "api_key" in params and "openbb_fmp_api_key" not in params:
+                params["openbb_fmp_api_key"] = params["api_key"]
+            if "profile" in params:
+                # Surface profile for observability/troubleshooting
+                params["openbb_mcp_profile"] = params["profile"]
             # Support Smithery-style base64 JSON config blob
             if "config" in params and isinstance(params["config"], str):
                 decoded = _decode_base64_json(params["config"]) or {}
@@ -260,6 +266,10 @@ class SessionConfigMiddleware(Middleware):  # type: ignore[misc]
         config: Dict[str, Any] = {}
         if request is not None:
             params: Dict[str, Any] = {k: v for k, v in request.query_params.items()}
+            if "api_key" in params and "openbb_fmp_api_key" not in params:
+                params["openbb_fmp_api_key"] = params["api_key"]
+            if "profile" in params:
+                params["openbb_mcp_profile"] = params["profile"]
             if "config" in params and isinstance(params["config"], str):
                 decoded = _decode_base64_json(params["config"]) or {}
                 params.update(_coerce_params_types(decoded))
