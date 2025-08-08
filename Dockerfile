@@ -43,10 +43,10 @@ RUN apt-get purge -y --auto-remove build-essential git && \
 RUN useradd -ms /bin/bash appuser
 USER appuser
 
-ENV HOME=/app
+ENV HOME=/home/appuser
 
 # Create OpenBB config dir
-RUN mkdir -p /app/.openbb_platform
+RUN mkdir -p /home/appuser/.openbb_platform
 
 # Copy entrypoint
 COPY --chown=appuser:appuser docker-entrypoint.sh /app/docker-entrypoint.sh
