@@ -47,10 +47,6 @@ ENV HOME=/home/appuser
 # Create OpenBB config dir
 RUN mkdir -p /home/appuser/.openbb_platform
 
-# Copy entrypoint
-COPY --chown=appuser:appuser docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
-
 EXPOSE ${PORT}
 
 ENTRYPOINT ["openbb-mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8080"]
