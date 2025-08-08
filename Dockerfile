@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_SYSTEM_PYTHON=1 \
     UV_PYTHON_DOWNLOADS=0 \
     UV_COMPILE_BYTECODE=1 \
+    FASTMCP_EXPERIMENTAL_ENABLE_NEW_OPENAPI_PARSER=1 \
     PORT=8080
 
 # System deps
@@ -26,9 +27,12 @@ RUN apt-get update -y && \
 
 WORKDIR /app
 
-# Install OpenBB with all extensions
+# Copy local MCP server source
+COPY mcp_server /app/mcp_server
+
+# Install local MCP server and OpenBB (for full extensions) using uv
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache openbb-mcp-server openbb
+    uv pip install --system --no-cache /app/mcp_server openbb
 
 # Remove build-only dependencies to slim the image
 RUN apt-get purge -y --auto-remove build-essential git && \
@@ -49,6 +53,6 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE ${PORT}
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["openbb-mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8080"]
 
 
