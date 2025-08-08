@@ -1,0 +1,92 @@
+runtime: "container"
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      openbb_fmp_api_key:
+        type: "string"
+        title: "FMP API Key"
+        description: "FinancialModelingPrep API Key"
+      openbb_polygon_api_key:
+        type: "string"
+        title: "Polygon API Key"
+      openbb_benzinga_api_key:
+        type: "string"
+        title: "Benzinga API Key"
+      openbb_bls_api_key:
+        type: "string"
+        title: "BLS API Key"
+      openbb_cftc_app_token:
+        type: "string"
+        title: "CFTC App Token"
+      openbb_econdb_api_key:
+        type: "string"
+        title: "EconDB API Key"
+      openbb_fred_api_key:
+        type: "string"
+        title: "FRED API Key"
+      openbb_intrinio_api_key:
+        type: "string"
+        title: "Intrinio API Key"
+      openbb_tradingeconomics_api_key:
+        type: "string"
+        title: "TradingEconomics API Key"
+      openbb_tiingo_token:
+        type: "string"
+        title: "Tiingo Token"
+      openbb_eia_api_key:
+        type: "string"
+        title: "US EIA API Key"
+      openbb_alpha_vantage_api_key:
+        type: "string"
+        title: "Alpha Vantage API Key"
+      openbb_biztoc_api_key:
+        type: "string"
+        title: "Biztoc API Key"
+      openbb_nasdaq_api_key:
+        type: "string"
+        title: "Nasdaq Data Link API Key"
+      openbb_tradier_api_key:
+        type: "string"
+        title: "Tradier API Key"
+      openbb_tradier_account_type:
+        type: "string"
+        title: "Tradier Account Type"
+      openbb_mcp_name:
+        type: "string"
+        title: "Server Name"
+        description: "Display name for the MCP server"
+      openbb_mcp_description:
+        type: "string"
+        title: "Description"
+      openbb_mcp_default_tool_categories:
+        type: "string"
+        title: "Default Categories"
+        description: "Comma-separated list (e.g., admin or equity,news)"
+      openbb_mcp_allowed_tool_categories:
+        type: "string"
+        title: "Allowed Categories"
+        description: "Comma-separated list to restrict categories"
+      openbb_mcp_enable_tool_discovery:
+        type: "boolean"
+        title: "Enable Tool Discovery"
+        default: true
+      openbb_mcp_describe_all_responses:
+        type: "boolean"
+        title: "Describe All Responses"
+        default: false
+      openbb_mcp_describe_full_response_schema:
+        type: "boolean"
+        title: "Describe Full Response Schema"
+        default: false
+    additionalProperties: true
+  exampleConfig:
+    openbb_mcp_name: "OpenBB MCP"
+    openbb_mcp_default_tool_categories: "admin"
+    openbb_mcp_enable_tool_discovery: true
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+
+
