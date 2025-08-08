@@ -9,6 +9,8 @@ key 'session_config'.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
@@ -21,16 +23,57 @@ except Exception:  # pragma: no cover - fallback if fastmcp API changes
     MiddlewareContext = object  # type: ignore[assignment]
 
 
-def _to_bool(value: str) -> bool:
-    lowered = value.strip().lower()
+def _to_bool(value: str | bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    lowered = str(value).strip().lower()
     return lowered in {"1", "true", "yes", "on"}
 
 
-def _to_list(value: str) -> list[str]:
-    return [part.strip() for part in value.split(",") if part.strip()]
+def _to_list(value: str | list[str]) -> list[str]:
+    if isinstance(value, list):
+        return [str(part).strip() for part in value if str(part).strip()]
+    return [part.strip() for part in str(value).split(",") if part.strip()]
 
 
-def _normalize_keys(params: Mapping[str, str]) -> Dict[str, Any]:
+def _decode_base64_json(value: str) -> dict:
+    """Best-effort decode of a base64/base64url JSON string.
+
+    Accepts values with missing padding and URL-safe characters.
+    Returns an empty dict on any failure.
+    """
+    if not value:
+        return {}
+    # Normalize padding
+    padded = value + "=" * ((4 - len(value) % 4) % 4)
+    for decoder in (base64.urlsafe_b64decode, base64.b64decode):
+        try:
+            raw = decoder(padded)
+            return json.loads(raw.decode("utf-8"))
+        except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return {}
+
+
+def _coerce_params_types(data: Mapping[str, Any]) -> Dict[str, Any]:
+    """Coerce incoming JSON values into the shapes expected by normalizer.
+
+    - Booleans remain booleans
+    - Lists of strings remain lists
+    - Other values are cast to str
+    """
+    coerced: Dict[str, Any] = {}
+    for key, value in data.items():
+        if isinstance(value, bool):
+            coerced[key] = value
+        elif isinstance(value, list):
+            coerced[key] = [str(v) for v in value]
+        else:
+            coerced[key] = str(value)
+    return coerced
+
+
+def _normalize_keys(params: Mapping[str, Any]) -> Dict[str, Any]:
     """Map smithery.yaml param names to internal settings keys and coerce types.
 
     Known keys (from smithery.yaml):
@@ -51,7 +94,8 @@ def _normalize_keys(params: Mapping[str, str]) -> Dict[str, Any]:
             params["openbb_mcp_default_tool_categories"]
         )
     if "openbb_mcp_allowed_tool_categories" in params:
-        value = params["openbb_mcp_allowed_tool_categories"].strip()
+        raw = params["openbb_mcp_allowed_tool_categories"]
+        value = str(raw).strip()
         out["allowed_tool_categories"] = _to_list(value) if value else None
     if "openbb_mcp_enable_tool_discovery" in params:
         out["enable_tool_discovery"] = _to_bool(
@@ -75,7 +119,7 @@ def _normalize_keys(params: Mapping[str, str]) -> Dict[str, Any]:
             # Map to user_settings.json credential key names by removing the prefix
             # Example: openbb_fmp_api_key -> fmp_api_key
             base_key = key[len("openbb_") :]
-            providers[base_key] = value
+            providers[base_key] = str(value)
     if providers:
         out["providers"] = providers
 
@@ -150,7 +194,12 @@ class SessionConfigMiddleware(Middleware):  # type: ignore[misc]
         # Derive/refresh config from query parameters if available
         config: Dict[str, Any] = {}
         if request is not None:
-            params = {k: v for k, v in request.query_params.items()}
+            # Start with direct query params
+            params: Dict[str, Any] = {k: v for k, v in request.query_params.items()}
+            # Support Smithery-style base64 JSON config blob
+            if "config" in params and isinstance(params["config"], str):
+                decoded = _decode_base64_json(params["config"]) or {}
+                params.update(_coerce_params_types(decoded))
             normalized = _normalize_keys(params)
             if normalized:
                 config.update(normalized)
@@ -187,6 +236,72 @@ class SessionConfigMiddleware(Middleware):  # type: ignore[misc]
             finally:
                 # Restore original settings after the tool call
                 self._write_json(settings_path, original if isinstance(original, dict) else {})
+
+    async def on_get_tools(self, context: MiddlewareContext, call_next):  # type: ignore[override]
+        """Filter tools per session based on query params and cached config.
+
+        This ensures each session can see only the categories allowed or selected
+        as defaults, similar to Smithery's stateful server behavior.
+        """
+        fastmcp_ctx = context.fastmcp_context
+
+        session_id: Optional[str] = None
+        try:
+            session_id = fastmcp_ctx.session_id()
+        except Exception:
+            session_id = None
+
+        request = None
+        try:
+            request = fastmcp_ctx.get_http_request()
+        except Exception:
+            request = None
+
+        config: Dict[str, Any] = {}
+        if request is not None:
+            params: Dict[str, Any] = {k: v for k, v in request.query_params.items()}
+            if "config" in params and isinstance(params["config"], str):
+                decoded = _decode_base64_json(params["config"]) or {}
+                params.update(_coerce_params_types(decoded))
+            normalized = _normalize_keys(params)
+            if normalized:
+                config.update(normalized)
+
+        if not config and session_id:
+            cached = self.store.get(session_id)
+            if cached:
+                config.update(cached)
+
+        if session_id and config:
+            self.store.set(session_id, config)
+
+        if config:
+            fastmcp_ctx.set_state("session_config", config)
+
+        # Get full toolset and then filter for this session
+        tools = await call_next()
+        try:
+            default_cats = set(config.get("default_tool_categories") or [])
+            allowed_cats = config.get("allowed_tool_categories")
+            allowed_cats_set = set(allowed_cats) if allowed_cats else None
+
+            def tool_in_categories(tool) -> bool:
+                tags = set(getattr(tool, "tags", set()) or [])
+                # Enforce allowed set if provided
+                if allowed_cats_set is not None and not (tags & allowed_cats_set):
+                    return False
+                # Default set is treated as the initial exposure list
+                if default_cats and "all" not in default_cats and not (tags & default_cats):
+                    return False
+                return True
+
+            if isinstance(tools, dict):
+                return {name: tool for name, tool in tools.items() if tool_in_categories(tool)}
+        except Exception:
+            # Best effort: never fail tool listing due to filtering
+            return tools
+
+        return tools
 
 
 __all__ = [

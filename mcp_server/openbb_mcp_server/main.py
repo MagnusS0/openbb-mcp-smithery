@@ -13,6 +13,12 @@ from fastmcp.server.openapi import (
     OpenAPIResourceTemplate,
     OpenAPITool,
 )
+from fastmcp.experimental.server.openapi import (
+    OpenAPITool as OpenAPIToolExperimental,
+    OpenAPIResource as OpenAPIResourceExperimental,
+    OpenAPIResourceTemplate as OpenAPIResourceTemplateExperimental,
+    FastMCPOpenAPI as FastMCPOpenAPIExperimental,
+)
 from fastmcp.utilities.json_schema import compress_schema
 from fastmcp.utilities.openapi import HTTPRoute
 from openbb_core.api.rest_api import app
@@ -58,10 +64,10 @@ def create_mcp_server(settings: MCPSettings, fastapi_app: FastAPI) -> FastMCPOpe
 
     def customize_components(
         route: HTTPRoute,
-        component: OpenAPITool | OpenAPIResource | OpenAPIResourceTemplate,
+        component: OpenAPITool | OpenAPIResource | OpenAPIResourceTemplate | OpenAPIToolExperimental | OpenAPIResourceExperimental | OpenAPIResourceTemplateExperimental,
     ) -> None:
         """Attach category/tool tags & disable tools based on settings."""
-        if not isinstance(component, OpenAPITool):
+        if not isinstance(component, (OpenAPITool, OpenAPIToolExperimental)):
             return
 
         segments = [seg for seg in route.path.lstrip("/").split("/") if "{" not in seg]
