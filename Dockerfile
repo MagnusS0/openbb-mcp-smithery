@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_SYSTEM_PYTHON=1 \
     UV_PYTHON_DOWNLOADS=0 \
     UV_COMPILE_BYTECODE=1 \
-    PORT=8000
+    PORT=8080
 
 # System deps
 RUN apt-get update -y && \
