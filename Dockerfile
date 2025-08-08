@@ -28,12 +28,7 @@ WORKDIR /app
 
 # Install OpenBB with all extensions
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache "openbb[all]"
-
-# Ensure NumPy 2 compatibility by using OpenBB's pandas-ta fork
-RUN pip uninstall -y pandas-ta || true
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache --reinstall "pandas-ta-openbb>=0.4.22"
+    uv pip install --system --no-cache openbb-mcp-server openbb
 
 # Remove build-only dependencies to slim the image
 RUN apt-get purge -y --auto-remove build-essential git && \

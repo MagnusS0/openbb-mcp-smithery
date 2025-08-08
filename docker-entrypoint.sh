@@ -88,17 +88,20 @@ if [[ -n "${OPENBB_MCP_ENABLE_TOOL_DISCOVERY:-}" ]]; then
 fi
 
 # Start OpenBB MCP server over Streamable HTTP bound to PORT
-# Prefer module execution if available; fall back to CLI; final fallback uses uvx
+if command -v openbb-mcp >/dev/null 2>&1; then
+  exec openbb-mcp --transport streamable-http --host 0.0.0.0 --port "${PORT}" "${ARGS[@]}"
+fi
+
+# Fallback: run via Python module if available
 if python - <<'PY'
 import importlib.util, sys
 sys.exit(0 if importlib.util.find_spec('openbb_mcp_server') else 1)
 PY
 then
   exec python -m openbb_mcp_server.main --transport streamable-http --host 0.0.0.0 --port "${PORT}" "${ARGS[@]}"
-elif command -v openbb-mcp >/dev/null 2>&1; then
-  exec openbb-mcp --transport streamable-http --host 0.0.0.0 --port "${PORT}" "${ARGS[@]}"
-else
-  exec uvx --from openbb-mcp-server --with openbb openbb-mcp --transport streamable-http --host 0.0.0.0 --port "${PORT}" "${ARGS[@]}"
 fi
+
+echo "openbb-mcp not found and openbb_mcp_server module unavailable. Ensure 'openbb-mcp-server' is installed in the image." >&2
+exit 1
 
 
