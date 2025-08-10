@@ -4,87 +4,87 @@ startCommand:
   configSchema:
     type: "object"
     properties:
-      openbb_fmp_api_key:
+      FMP_API_KEY:
         type: "string"
         title: "FMP API Key"
         description: "FinancialModelingPrep API Key"
-      openbb_polygon_api_key:
+      POLYGON_API_KEY:
         type: "string"
         title: "Polygon API Key"
-      openbb_benzinga_api_key:
+      BENZINGA_API_KEY:
         type: "string"
         title: "Benzinga API Key"
-      openbb_bls_api_key:
+      BLS_API_KEY:
         type: "string"
         title: "BLS API Key"
-      openbb_cftc_app_token:
+      CFTC_APP_TOKEN:
         type: "string"
         title: "CFTC App Token"
-      openbb_econdb_api_key:
+      ECONDB_API_KEY:
         type: "string"
         title: "EconDB API Key"
-      openbb_fred_api_key:
+      FRED_API_KEY:
         type: "string"
         title: "FRED API Key"
-      openbb_intrinio_api_key:
+      INTRINIO_API_KEY:
         type: "string"
         title: "Intrinio API Key"
-      openbb_tradingeconomics_api_key:
+      TRADINGECONOMICS_API_KEY:
         type: "string"
         title: "TradingEconomics API Key"
-      openbb_tiingo_token:
+      TIINGO_TOKEN:
         type: "string"
         title: "Tiingo Token"
-      openbb_eia_api_key:
+      EIA_API_KEY:
         type: "string"
         title: "US EIA API Key"
-      openbb_alpha_vantage_api_key:
+      ALPHA_VANTAGE_API_KEY:
         type: "string"
         title: "Alpha Vantage API Key"
-      openbb_biztoc_api_key:
+      BIZTOC_API_KEY:
         type: "string"
         title: "Biztoc API Key"
-      openbb_nasdaq_api_key:
+      NASDAQ_API_KEY:
         type: "string"
         title: "Nasdaq Data Link API Key"
-      openbb_tradier_api_key:
+      TRADIER_API_KEY:
         type: "string"
         title: "Tradier API Key"
-      openbb_tradier_account_type:
+      TRADIER_ACCOUNT_TYPE:
         type: "string"
         title: "Tradier Account Type"
-      openbb_mcp_name:
+      OPENBB_MCP_NAME:
         type: "string"
         title: "Server Name"
         description: "Display name for the MCP server"
-      openbb_mcp_description:
+      OPENBB_MCP_DESCRIPTION:
         type: "string"
         title: "Description"
-      openbb_mcp_default_tool_categories:
+      OPENBB_MCP_DEFAULT_TOOL_CATEGORIES:
         type: "string"
         title: "Default Categories"
         description: "Comma-separated list (e.g., admin or equity,news)"
-      openbb_mcp_allowed_tool_categories:
+      OPENBB_MCP_ALLOWED_TOOL_CATEGORIES:
         type: "string"
         title: "Allowed Categories"
         description: "Comma-separated list to restrict categories"
-      openbb_mcp_enable_tool_discovery:
+      OPENBB_MCP_ENABLE_TOOL_DISCOVERY:
         type: "boolean"
         title: "Enable Tool Discovery"
         default: true
-      openbb_mcp_describe_all_responses:
+      OPENBB_MCP_DESCRIBE_ALL_RESPONSES:
         type: "boolean"
         title: "Describe All Responses"
         default: false
-      openbb_mcp_describe_full_response_schema:
+      OPENBB_MCP_DESCRIBE_FULL_RESPONSE_SCHEMA:
         type: "boolean"
         title: "Describe Full Response Schema"
         default: false
     additionalProperties: true
   exampleConfig:
-    openbb_mcp_name: "OpenBB MCP"
-    openbb_mcp_default_tool_categories: "admin"
-    openbb_mcp_enable_tool_discovery: true
+    OPENBB_MCP_NAME: "OpenBB MCP"
+    OPENBB_MCP_DEFAULT_TOOL_CATEGORIES: "admin"
+    OPENBB_MCP_ENABLE_TOOL_DISCOVERY: true
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."

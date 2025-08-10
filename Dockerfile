@@ -1,23 +1,44 @@
 # syntax=docker/dockerfile:1.7-labs
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
+
+# --- Builder: create a virtual environment with project + deps using uv ---
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+# Install transitive dependencies (without the project) in a separate layer
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=/app/uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=/app/pyproject.toml \
+    uv sync --locked --no-install-project --no-dev
+
+# Copy the full project
+ADD . /app
+
+# Sync the project into the environment (editable by default)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev
+
+
+# --- Final runtime image (no uv in base image) ---
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_SYSTEM_PYTHON=1 \
     UV_PYTHON_DOWNLOADS=0 \
     UV_COMPILE_BYTECODE=1 \
     FASTMCP_EXPERIMENTAL_ENABLE_NEW_OPENAPI_PARSER=1 \
     PORT=8080
 
-# System deps
+# Minimal runtime system dependencies for networking and OpenBB
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
-      build-essential \
       curl \
       ca-certificates \
-      git \
       libxml2 \
       libxslt1.1 \
       libffi8 \
@@ -25,38 +46,35 @@ RUN apt-get update -y && \
       libstdc++6 \
       && rm -rf /var/lib/apt/lists/*
 
+# Provide uv/uvx binaries for runtime (router uses uvx to launch child server)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Create non-root user and group
+RUN useradd -ms /bin/bash app
+
+# Copy the application (including the synced .venv)
+COPY --from=builder --chown=app:app /app /app
+
+USER app
 WORKDIR /app
 
-# Copy minimal Smithery router source
-COPY src /app/src
+# Use the project's virtual environment by default
+ENV PATH="/app/.venv/bin:$PATH"
+ENV HOME=/home/app
 
-# Install runtime deps: fastapi, uvicorn, httpx, pydantic
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache fastapi uvicorn httpx pydantic uvloop httptools
+# Create working dirs used by the router
+RUN mkdir -p /home/app/.openbb_platform /tmp/openbb_mcp_sessions
 
-# Remove build-only dependencies to slim the image
-RUN apt-get purge -y --auto-remove build-essential git && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Create runtime user
-RUN useradd -ms /bin/bash appuser
-USER appuser
-
-ENV HOME=/home/appuser
-
-# Create working dirs
-RUN mkdir -p /home/appuser/.openbb_platform /tmp/openbb_mcp_sessions
-
-# Pre-warm uvx cache
+# Optionally pre-warm uvx cache to speed up first request
 RUN uvx --from openbb-mcp-server --with openbb openbb-mcp --help >/dev/null 2>&1 || true
 
 EXPOSE ${PORT}
 
-# Run the Smithery router
-ENV PYTHONPATH=/app/src
-
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
 
-# Entrypoint: respect PORT env inside the app
+# Ensure the package is importable if editable install is used
+ENV PYTHONPATH=/app/src
+
+# Entrypoint
 ENTRYPOINT ["python", "-m", "smithery_router.router"]
