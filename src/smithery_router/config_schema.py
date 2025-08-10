@@ -1,7 +1,5 @@
 """Session configuration schema and parsing utilities."""
 
-from __future__ import annotations
-
 import json
 from base64 import b64decode
 from typing import Any, Dict, Mapping, MutableMapping
@@ -101,18 +99,3 @@ def parse_and_validate_config(query_params: Mapping[str, Any]) -> SessionConfig:
         return SessionConfig.model_validate(payload)
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
-
-
-def session_config_json_schema() -> Dict[str, Any]:
-    """Return JSON Schema for SessionConfig with Smithery metadata extensions."""
-    schema = SessionConfig.model_json_schema()
-    schema.update(
-        {
-            "x-mcp-version": "1.0",
-            "x-query-style": "dot+bracket",
-            "$id": "https://schema.openbb.ai/smithery/session-config.json",
-            "title": "OpenBB MCP SessionConfig",
-            "description": "Configuration for a per-session OpenBB MCP worker",
-        }
-    )
-    return schema

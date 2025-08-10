@@ -1,11 +1,9 @@
 """In-memory LRU session store with optional TTL and cleanup."""
 
-from __future__ import annotations
-
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Union
 
 
 @dataclass
@@ -21,12 +19,34 @@ class LRUSessionStore:
         self,
         max_size: int = 1000,
         ttl_seconds: Optional[int] = None,
-        on_evict: Optional[Callable[[SessionEntry], None]] = None,
+        on_evict: Optional[
+            Union[
+                Callable[[SessionEntry], None],
+                Callable[[SessionEntry], Awaitable[None]],
+            ]
+        ] = None,
     ) -> None:
         self._store: "OrderedDict[str, SessionEntry]" = OrderedDict()
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.on_evict = on_evict
+
+    def _handle_evict_callback(self, entry: SessionEntry) -> None:
+        if self.on_evict:
+            try:
+                import asyncio
+
+                result = self.on_evict(entry)
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutine(result):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(result)
+                    except RuntimeError:
+                        # No running loop, ignore async call
+                        pass
+            except Exception:  # noqa: BLE001
+                pass
 
     def _evict_if_needed(self) -> None:
         # TTL eviction
@@ -39,20 +59,12 @@ class LRUSessionStore:
             ]
             for k in expired:
                 entry = self._store.pop(k)
-                if self.on_evict:
-                    try:
-                        self.on_evict(entry)
-                    except Exception:  # noqa: BLE001
-                        pass
+                self._handle_evict_callback(entry)
 
         # Size eviction (LRU)
         while len(self._store) > self.max_size:
             _, entry = self._store.popitem(last=False)
-            if self.on_evict:
-                try:
-                    self.on_evict(entry)
-                except Exception:  # noqa: BLE001
-                    pass
+            self._handle_evict_callback(entry)
 
     def get(self, key: str) -> Any | None:
         entry = self._store.get(key)
@@ -81,11 +93,8 @@ class LRUSessionStore:
 
     def delete(self, key: str) -> bool:
         entry = self._store.pop(key, None)
-        if entry and self.on_evict:
-            try:
-                self.on_evict(entry)
-            except Exception:  # noqa: BLE001
-                pass
+        if entry:
+            self._handle_evict_callback(entry)
         return entry is not None
 
     def stats(self) -> dict[str, Any]:
