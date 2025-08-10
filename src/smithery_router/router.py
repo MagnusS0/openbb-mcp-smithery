@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, Mapping, Optional
@@ -51,13 +52,16 @@ def _find_free_port(host: str = DEFAULT_HOST) -> int:
 
 def _write_env_file(session_dir: Path, env_map: Dict[str, str]) -> Path:
     """Write a .env file with the provided environment variables."""
-    session_dir.mkdir(parents=True, exist_ok=True)
+    # Restrictive permissions (owner only)
+    session_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     env_file = session_dir / ".env"
     lines = []
     for key, value in env_map.items():
         safe_value = str(value).replace("\n", "\\n")
         lines.append(f"{key}={safe_value}")
+
     env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env_file.chmod(0o600)
     return env_file
 
 
@@ -180,8 +184,24 @@ registry = ProcessRegistry()
 LOGGER = logging.getLogger("openbb_mcp_router")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger = LOGGER
+    Path(tempfile.gettempdir(), "openbb_mcp_sessions").mkdir(
+        parents=True, exist_ok=True
+    )
+    logger.info("router.start host=%s port=%s", DEFAULT_HOST, ROUTER_PORT)
+    
+    yield
+    
+    # Shutdown
+    registry.shutdown()
+    logger.info("router.stop")
+
+
 def _build_app() -> FastAPI:
-    app = FastAPI(title="OpenBB MCP Smithery Router")
+    app = FastAPI(title="OpenBB MCP Smithery Router", lifespan=lifespan)
 
     if EXPOSE_CORS:
         app.add_middleware(
@@ -219,17 +239,72 @@ def _build_app() -> FastAPI:
     async def status() -> JSONResponse:
         return JSONResponse({"status": "ok", **registry.stats()})
 
-    @app.on_event("startup")
-    async def on_startup() -> None:
-        Path(tempfile.gettempdir(), "openbb_mcp_sessions").mkdir(
-            parents=True, exist_ok=True
-        )
-        logger.info("router.start host=%s port=%s", DEFAULT_HOST, ROUTER_PORT)
+    @app.get("/tools")
+    async def tools_list() -> JSONResponse:
+        """Lazy loading endpoint for tool discovery without requiring a session."""
+        try:
+            # Create a temporary child process just to get the tools list
+            session_id = "temp-discovery"
+            port = _find_free_port()
+            
+            # Use minimal environment for discovery
+            session_dir = Path(tempfile.gettempdir()) / "openbb_mcp_discovery" / session_id
+            env_map = {
+                "OPENBB_DIRECTORY": str(session_dir),
+                "OPENBB_MCP_ENABLE_TOOL_DISCOVERY": "true",
+                # Don't require API keys for discovery
+            }
+            env_file = _write_env_file(session_dir, env_map)
+            
+            proc = _spawn_child(env_file, port)
+            
+            try:
+                # Wait for child to be ready
+                await _await_child_ready(port, proc, 10.0)  # Shorter timeout for discovery
+                
+                if proc.poll() is not None:
+                    raise HTTPException(status_code=503, detail="Failed to start discovery process")
+                
+                # Make a simple tools request to get the list
+                url = f"http://{DEFAULT_HOST}:{port}/mcp/"
+                timeout = httpx.Timeout(10.0)
+                
+                # MCP tools/list request
+                tools_request = {
+                    "jsonrpc": "2.0",
+                    "id": "discovery",
+                    "method": "tools/list",
+                    "params": {}
+                }
+                
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.post(url, json=tools_request)
+                    
+                    if resp.status_code == 200:
+                        return JSONResponse(resp.json())
+                    else:
+                        return JSONResponse({"error": "Failed to fetch tools"}, status_code=503)
+                        
+            finally:
+                # Clean up the temporary process
+                try:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except Exception:  # noqa: BLE001
+                            proc.kill()
+                finally:
+                    try:
+                        shutil.rmtree(session_dir, ignore_errors=True)
+                    except Exception:  # noqa: BLE001
+                        pass
+                        
+        except Exception as e:
+            logger.error("tools_discovery.error %s", str(e))
+            return JSONResponse({"error": "Tool discovery failed"}, status_code=503)
 
-    @app.on_event("shutdown")
-    async def on_shutdown() -> None:
-        registry.shutdown()
-        logger.info("router.stop")
+
 
     return app
 
