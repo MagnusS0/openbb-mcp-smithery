@@ -88,5 +88,3 @@ startCommand:
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."
-
-

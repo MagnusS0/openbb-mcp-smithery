@@ -1,0 +1,18 @@
+[project]
+name = "openbb-mcp-smithery"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.116.1",
+    "pydantic>=2.11.7",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "rich>=14.1.0",
+    "ruff>=0.12.8",
+    "ty>=0.0.1a17",
+]

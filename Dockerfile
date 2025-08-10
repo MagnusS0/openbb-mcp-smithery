@@ -27,12 +27,12 @@ RUN apt-get update -y && \
 
 WORKDIR /app
 
-# Copy local MCP server source
-COPY mcp_server /app/mcp_server
+# Copy minimal Smithery router source
+COPY src /app/src
 
-# Install local MCP server and OpenBB (for full extensions) using uv
+# Install runtime deps: fastapi, uvicorn, httpx, pydantic
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache /app/mcp_server openbb
+    uv pip install --system --no-cache fastapi uvicorn httpx pydantic uvloop httptools
 
 # Remove build-only dependencies to slim the image
 RUN apt-get purge -y --auto-remove build-essential git && \
@@ -44,11 +44,19 @@ USER appuser
 
 ENV HOME=/home/appuser
 
-# Create OpenBB config dir
-RUN mkdir -p /home/appuser/.openbb_platform
+# Create working dirs
+RUN mkdir -p /home/appuser/.openbb_platform /tmp/openbb_mcp_sessions
+
+# Pre-warm uvx cache
+RUN uvx --from openbb-mcp-server --with openbb openbb-mcp --help >/dev/null 2>&1 || true
 
 EXPOSE ${PORT}
 
-ENTRYPOINT ["openbb-mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8080"]
+# Run the Smithery router
+ENV PYTHONPATH=/app/src
 
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
 
+# Entrypoint: respect PORT env inside the app
+ENTRYPOINT ["python", "-m", "smithery_router.router"]

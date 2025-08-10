@@ -1,0 +1,1 @@
+"""Smithery router package."""
