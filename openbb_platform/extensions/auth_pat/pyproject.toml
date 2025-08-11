@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "openbb-auth-pat"
+version = "0.0.1"
+description = "OpenBB Multi-Session PAT Authentication Extension"
+authors = ["OpenBB Team <info@openbb.co>"]
+readme = "README.md"
+packages = [{ include = "openbb_auth_pat" }]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+openbb-core = { version = "^1.1.2" }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+pytest-asyncio = "^0.21.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins."openbb_core_extension"]
+auth_pat = "openbb_auth_pat"
