@@ -114,7 +114,7 @@ def test_validate_mcp_config():
         validate_mcp_config(invalid_config_dict)
 
     # Non-strict mode
-    with patch("logging.warning") as mock_warning:
+    with patch("openbb_mcp_server.models.mcp_config.logger.warning") as mock_warning:
         config = validate_mcp_config(invalid_config_dict, strict=False)
         assert isinstance(config, MCPConfigModel)
         assert config.methods is None

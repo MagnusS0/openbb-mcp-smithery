@@ -8,7 +8,10 @@ import re
 from enum import Enum
 from typing import Any, Optional, Union
 
+from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = get_logger(__name__)
 
 
 class MCPType(str, Enum):
@@ -246,9 +249,10 @@ def validate_mcp_config(
     """
     try:
         return MCPConfigModel.model_validate(config_dict)
-    except Exception:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except
         if strict:
-            raise
+            raise exc from exc
+        logger.warning("MCP config validation failed ->", exc_info=exc)
         return MCPConfigModel()
 
 
