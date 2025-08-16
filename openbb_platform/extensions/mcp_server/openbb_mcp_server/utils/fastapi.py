@@ -94,7 +94,7 @@ def _create_prompt_definitions_for_route(
 ) -> list[dict]:
     """Create prompt definitions for a route if prompt configs exist."""
     prompt_configs = _get_prompt_configs(route)
-    definitions = []
+    definitions: list[dict] = []
 
     if not prompt_configs:
         return definitions
