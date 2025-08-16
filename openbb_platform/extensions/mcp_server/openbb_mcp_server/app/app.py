@@ -424,7 +424,7 @@ def create_mcp_server(
     async def list_prompts() -> list:
         """List all available prompts."""
         prompts = await mcp.get_prompts()
-        logger.info("Available prompts: %s", list(prompts.keys()))
+
         return [
             {"name": p.name, "tags": p.tags, "arguments": p.arguments}
             for p in prompts.values()
