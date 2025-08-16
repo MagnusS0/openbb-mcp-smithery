@@ -19,6 +19,7 @@ class ProcessedRouteData:
     """Container for all data collected during route processing."""
 
     def __init__(self):
+        """Initialize with empty lists and dictionaries."""
         self.route_maps: list[RouteMap] = []
         self.route_lookup: dict[tuple[str, str], APIRoute] = {}
         self.removed_routes: list[APIRoute] = []
