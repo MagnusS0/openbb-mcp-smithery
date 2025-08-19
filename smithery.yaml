@@ -1,0 +1,17 @@
+runtime: "container"
+build:
+  dockerfile: "Dockerfile"           # Path to your Dockerfile
+  dockerBuildPath: "."               # Docker build context
+startCommand:
+  type: "http"
+  configSchema:
+    type: object
+    required:
+      - apiKey
+    properties:
+      apiKey:
+        type: string
+        title: Personal Access Token (PAT)
+        description: Required PAT used to authenticate requests
+  exampleConfig:
+    apiKey: "sk-example-123"

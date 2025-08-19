@@ -27,9 +27,8 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from openbb_mcp_server.models.mcp_config import (
-    is_valid_mcp_config,
-)
+from openbb_mcp_server.middleware import ForwardAuthMiddleware, SmitheryConfigMiddleware
+from openbb_mcp_server.models.mcp_config import is_valid_mcp_config
 from openbb_mcp_server.models.prompts import StaticPrompt
 from openbb_mcp_server.models.registry import ToolRegistry
 from openbb_mcp_server.models.settings import MCPSettings
@@ -90,20 +89,54 @@ def _read_system_prompt_file(file_path: str) -> str | None:
     return None
 
 
-def _build_runtime_middleware() -> list:
+def _build_runtime_middleware(settings: MCPSettings) -> list:
     """Build middleware objects compatible with FastMCP.run(middleware=...)."""
     cors = SystemService().system_settings.api_settings.cors
 
-    return [
+    allow_origins = cors.allow_origins
+    if getattr(settings, "smithery_enabled", False) and settings.smithery_allow_origins:
+        allow_origins = settings.smithery_allow_origins
+
+    # Expose both cases to be tolerant of header casing across environments
+    expose_headers = [
+        "Mcp-Session-Id",
+        "mcp-session-id",
+        "mcp-protocol-version",
+    ]
+
+    middleware = [
         Middleware(
             CORSMiddleware,
-            allow_origins=cors.allow_origins,
+            allow_origins=allow_origins,
             allow_methods=cors.allow_methods,
             allow_headers=cors.allow_headers,
             allow_credentials=True,
-            expose_headers=["Mcp-Session-Id"],
+            expose_headers=expose_headers,
         )
     ]
+
+    # Capture Authorization/PAT for downstream forwarding if enabled
+    if getattr(settings, "forward_bearer_enabled", True):
+        middleware.append(Middleware(ForwardAuthMiddleware))
+
+    return middleware
+
+
+def _build_smithery_middleware(settings: MCPSettings) -> list:
+    """Optionally build Smithery middleware when enabled in settings.
+
+    The middleware will parse session configuration from query parameters and
+    update the MCPService runtime session config.
+    """
+    if not getattr(settings, "smithery_enabled", False):
+        return []
+
+    mcp_service = MCPService()
+
+    def _config_callback(config: dict) -> None:
+        mcp_service.update_runtime_session_config(config)
+
+    return [Middleware(SmitheryConfigMiddleware, config_callback=_config_callback)]
 
 
 # pylint: disable=R0915
@@ -254,6 +287,16 @@ def create_mcp_server(
 
     # Extract httpx_client_kwargs from settings/kwargs if available
     httpx_client_kwargs = httpx_kwargs or settings.httpx_client_kwargs
+    # Attach httpx.Auth that forwards the current request's bearer token
+    try:
+        from openbb_mcp_server.security.httpx_auth import ForwardBearerAuth
+
+        if httpx_client_kwargs is None:
+            httpx_client_kwargs = {}
+        # Avoid overwriting if user set a custom auth
+        httpx_client_kwargs.setdefault("auth", ForwardBearerAuth())
+    except Exception as e:
+        logger.debug("ForwardBearerAuth could not be initialized: %s", e)
 
     # Get only FastMCP constructor parameters (excludes uvicorn_config, httpx_client_kwargs)
     fastmcp_kwargs = settings.get_fastmcp_kwargs()
@@ -564,7 +607,10 @@ def main():
         if args.transport == "stdio":
             asyncio.run(stdio_main(mcp_server))
         else:
-            cors_middleware = _build_runtime_middleware()
+            cors_middleware = _build_runtime_middleware(settings)
+
+            # Optionally add Smithery middleware on top of standard CORS
+            cors_middleware.extend(_build_smithery_middleware(settings))
 
             # For HTTP transports, extract host/port from uvicorn_config and pass directly
             run_kwargs = {

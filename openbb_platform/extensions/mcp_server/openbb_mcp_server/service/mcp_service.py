@@ -42,6 +42,7 @@ class MCPService(metaclass=SingletonMeta):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize MCP service, loading settings from the configuration file."""
         self._mcp_settings = self._read_from_file(**kwargs)
+        self._runtime_session_config: dict[str, Any] = {}
 
     @classmethod
     def _read_from_file(cls, **kwargs: Any) -> MCPSettings:
@@ -104,6 +105,18 @@ class MCPService(metaclass=SingletonMeta):
         """Refresh MCP settings from the configuration file."""
         self._mcp_settings = self._read_from_file()
         return self._mcp_settings
+
+    # ===== Runtime session config (e.g., Smithery) =====
+    @property
+    def runtime_session_config(self) -> dict[str, Any]:
+        """Return the latest runtime session configuration gathered from middleware."""
+        return self._runtime_session_config
+
+    def update_runtime_session_config(self, config: dict[str, Any]) -> None:
+        """Merge incoming runtime configuration with the current one."""
+        if not isinstance(config, dict):
+            return
+        _merge_nested_dict(self._runtime_session_config, config)
 
     def load_with_overrides(self, **cli_overrides: Any) -> MCPSettings:
         """

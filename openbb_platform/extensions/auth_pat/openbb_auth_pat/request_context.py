@@ -15,6 +15,9 @@ _user_settings_context: contextvars.ContextVar[Optional[UserSettings]] = (
 _pat_context: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "pat", default=None
 )
+_session_id_context: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "mcp_session_id", default=None
+)
 
 
 class RequestContext:
@@ -59,10 +62,22 @@ class RequestContext:
         return _pat_context.get()
 
     @staticmethod
+    def set_session_id(session_id: Optional[str]) -> None:
+        """Set MCP session id for the current request context."""
+        _session_id_context.set(session_id)
+        logger.debug("MCP session id set in request context")
+
+    @staticmethod
+    def get_session_id() -> Optional[str]:
+        """Get MCP session id from the current request context."""
+        return _session_id_context.get()
+
+    @staticmethod
     def clear() -> None:
         """Clear all context variables for the current request."""
         _user_settings_context.set(None)
         _pat_context.set(None)
+        _session_id_context.set(None)
         logger.debug("Request context cleared")
 
     @staticmethod
@@ -79,7 +94,7 @@ class RequestContextManager:
     """Context manager for request-scoped authentication."""
 
     def __init__(
-        self, user_settings: Optional[UserSettings] = None, pat: Optional[str] = None
+        self, user_settings: Optional[UserSettings] = None, pat: Optional[str] = None, session_id: Optional[str] = None
     ):
         """Initialize the context manager.
 
@@ -91,18 +106,23 @@ class RequestContextManager:
         self.pat = pat
         self._previous_user_settings = None
         self._previous_pat: Optional[str] = None
+        self._previous_session_id: Optional[str] = None
+        self.session_id = session_id
 
     def __enter__(self):
         """Enter the context manager."""
         # Save previous context
         self._previous_user_settings = RequestContext.get_user_settings()
         self._previous_pat = RequestContext.get_pat()
+        self._previous_session_id = RequestContext.get_session_id()
 
         # Set new context
         if self.user_settings is not None:
             RequestContext.set_user_settings(self.user_settings)
         if self.pat is not None:
             RequestContext.set_pat(self.pat)
+        if self.session_id is not None:
+            RequestContext.set_session_id(self.session_id)
 
         return self
 
@@ -118,3 +138,7 @@ class RequestContextManager:
             RequestContext.set_pat(self._previous_pat)
         else:
             _pat_context.set(None)
+        if self._previous_session_id is not None:
+            RequestContext.set_session_id(self._previous_session_id)
+        else:
+            _session_id_context.set(None)

@@ -167,10 +167,36 @@ the exact same operations available to REST clients.""",
         alias="OPENBB_MCP_HTTPX_CLIENT_KWARGS",
     )
 
+    # ===== Optional Smithery Integration =====
+    smithery_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable Smithery-specific middleware for parsing session configuration "
+            "from query parameters (base64 'config' or 'smithery.*' keys)."
+        ),
+        alias="OPENBB_MCP_SMITHERY_ENABLED",
+    )
+    smithery_allow_origins: Optional[list[str]] = Field(
+        default=None,
+        description="Override CORS origins when running behind Smithery container.",
+        alias="OPENBB_MCP_SMITHERY_ALLOW_ORIGINS",
+    )
+
+    # ===== Optional Bearer Forwarding (PAT at runtime) =====
+    forward_bearer_enabled: bool = Field(
+        default=True,
+        description=(
+            "If True, capture incoming Authorization/PAT headers and forward them to backend "
+            "requests using an httpx.Auth hook."
+        ),
+        alias="OPENBB_MCP_FORWARD_BEARER_ENABLED",
+    )
+
     @field_validator(
         "default_tool_categories",
         "allowed_tool_categories",
         "dependencies",
+        "smithery_allow_origins",
         mode="before",
     )
     @classmethod
