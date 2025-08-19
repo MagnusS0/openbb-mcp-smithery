@@ -4,6 +4,7 @@ build:
   dockerBuildPath: "."               # Docker build context
 startCommand:
   type: "http"
+  port: 8080
   configSchema:                      # JSON Schema for configuration
     type: "object"
     properties:
