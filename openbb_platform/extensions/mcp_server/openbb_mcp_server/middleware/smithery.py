@@ -33,7 +33,11 @@ class SmitheryConfigMiddleware:
 
         try:
             raw_query = scope.get("query_string", b"")
-            query = raw_query.decode() if isinstance(raw_query, (bytes, bytearray)) else str(raw_query or "")
+            query = (
+                raw_query.decode()
+                if isinstance(raw_query, (bytes, bytearray))
+                else str(raw_query or "")
+            )
             if not query:
                 await self.app(scope, receive, send)
                 return
@@ -76,5 +80,3 @@ class SmitheryConfigMiddleware:
 
         finally:
             await self.app(scope, receive, send)
-
-

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import httpx
-
 from openbb_mcp_server.security.context import get_bearer_token
 
 
@@ -19,5 +18,3 @@ class ForwardBearerAuth(httpx.Auth):
         if token:
             request.headers.setdefault("Authorization", f"Bearer {token}")
         yield request
-
-

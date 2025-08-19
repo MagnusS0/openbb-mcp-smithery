@@ -94,7 +94,10 @@ class RequestContextManager:
     """Context manager for request-scoped authentication."""
 
     def __init__(
-        self, user_settings: Optional[UserSettings] = None, pat: Optional[str] = None, session_id: Optional[str] = None
+        self,
+        user_settings: Optional[UserSettings] = None,
+        pat: Optional[str] = None,
+        session_id: Optional[str] = None,
     ):
         """Initialize the context manager.
 

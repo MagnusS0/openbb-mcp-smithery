@@ -23,5 +23,3 @@ def get_bearer_token() -> Optional[str]:
 def clear_bearer_token() -> None:
     """Clear bearer token from the current request context."""
     _bearer_token_ctx.set(None)
-
-

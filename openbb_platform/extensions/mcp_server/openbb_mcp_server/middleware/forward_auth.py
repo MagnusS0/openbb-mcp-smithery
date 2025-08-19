@@ -6,7 +6,7 @@ from typing import Optional
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from openbb_mcp_server.security.context import set_bearer_token, clear_bearer_token
+from openbb_mcp_server.security.context import clear_bearer_token, set_bearer_token
 
 
 def _extract_bearer_from_headers(headers: list[tuple[bytes, bytes]]) -> Optional[str]:
@@ -59,5 +59,3 @@ class ForwardAuthMiddleware:
             await self.app(scope, receive, _send)
         finally:
             clear_bearer_token()
-
-
