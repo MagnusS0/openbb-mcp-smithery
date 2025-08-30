@@ -6,12 +6,12 @@ startCommand:
   type: "http"
   port: 8080
   configSchema:                      # JSON Schema for configuration
-    type: "object"
+    required: 
+      - apiKey
+    type: object
     properties:
       apiKey:
-        type: "string"
-        title: "Personal Access Token (PAT)"
-        description: "Required OpenBB PAT used to authenticate requests"
-    required: ["apiKey"]
+        type: string
+        description: Required OpenBB PAT used to authenticate requests
   exampleConfig:
-    apiKey: "sk-example123"
+    apiKey: sk-example123
