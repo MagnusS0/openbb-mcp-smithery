@@ -11,6 +11,13 @@ from typing import Any, Optional, Union
 from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+
+class SessionConfig(BaseModel):
+    """Smithery session configuration model."""
+
+    apiKey: str = Field(
+        ..., title="Personal Access Token (PAT)", description="Required OpenBB PAT used to authenticate requests")
+
 logger = get_logger(__name__)
 
 

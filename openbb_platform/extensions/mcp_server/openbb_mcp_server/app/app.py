@@ -28,7 +28,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from openbb_mcp_server.middleware import ForwardAuthMiddleware, SmitheryConfigMiddleware
-from openbb_mcp_server.models.mcp_config import is_valid_mcp_config
+from openbb_mcp_server.models.mcp_config import SessionConfig, is_valid_mcp_config
 from openbb_mcp_server.models.prompts import StaticPrompt
 from openbb_mcp_server.models.registry import ToolRegistry
 from openbb_mcp_server.models.settings import MCPSettings
@@ -309,6 +309,18 @@ def create_mcp_server(
         httpx_client_kwargs=httpx_client_kwargs,
         **fastmcp_kwargs,
     )
+
+    # Add the MCP config endpoint to the underlying FastAPI app
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @mcp.custom_route(
+        "/.well-known/mcp-config",
+        methods=["GET"]
+    )
+    async def smithery_config(request: Request) -> JSONResponse:
+        """MCP config endpoint handler."""
+        return JSONResponse(content=SessionConfig.model_json_schema())
 
     # Add system prompt if configured
     if settings.system_prompt_file:
