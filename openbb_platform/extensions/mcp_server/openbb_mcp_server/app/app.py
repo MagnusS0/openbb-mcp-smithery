@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastmcp import FastMCP
 from fastmcp.prompts.prompt import FunctionPrompt, PromptArgument, PromptResult
+from fastmcp.server.middleware import Middleware as FastMCPMiddleware
+from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
 from fastmcp.server.openapi import (
     OpenAPIResource,
     OpenAPIResourceTemplate,
@@ -90,7 +92,7 @@ def _read_system_prompt_file(file_path: str) -> str | None:
 
 
 def _build_runtime_middleware(settings: MCPSettings) -> list:
-    """Build middleware objects compatible with FastMCP.run(middleware=...)."""
+    """Build ASGI middleware objects for HTTP-specific concerns (CORS, etc.)."""
     cors = SystemService().system_settings.api_settings.cors
 
     allow_origins = cors.allow_origins
@@ -115,28 +117,28 @@ def _build_runtime_middleware(settings: MCPSettings) -> list:
         )
     ]
 
-    # Capture Authorization/PAT for downstream forwarding if enabled
-    if getattr(settings, "forward_bearer_enabled", True):
-        middleware.append(Middleware(ForwardAuthMiddleware))
+    # Note: MCP-specific middleware (auth, config parsing) is now handled by FastMCP middleware
+    # and added directly to the MCP server instance, not as ASGI middleware
 
     return middleware
 
 
-def _build_smithery_middleware(settings: MCPSettings) -> list:
-    """Optionally build Smithery middleware when enabled in settings.
+def _build_smithery_middleware(settings: MCPSettings, mcp_server: FastMCP) -> None:
+    """Add Smithery FastMCP middleware when enabled in settings.
 
     The middleware will parse session configuration from query parameters and
     update the MCPService runtime session config.
     """
     if not getattr(settings, "smithery_enabled", False):
-        return []
+        return
 
     mcp_service = MCPService()
 
     def _config_callback(config: dict) -> None:
         mcp_service.update_runtime_session_config(config)
 
-    return [Middleware(SmitheryConfigMiddleware, config_callback=_config_callback)]
+    # Add FastMCP middleware to the server
+    mcp_server.add_middleware(SmitheryConfigMiddleware(config_callback=_config_callback))
 
 
 # pylint: disable=R0915
@@ -310,7 +312,7 @@ def create_mcp_server(
         **fastmcp_kwargs,
     )
 
-    # Add the MCP config endpoint to the underlying FastAPI app
+    # Add the MCP config endpoint
     from fastapi import Request
     from fastapi.responses import JSONResponse
 
@@ -321,6 +323,18 @@ def create_mcp_server(
     async def smithery_config(request: Request) -> JSONResponse:
         """MCP config endpoint handler."""
         return JSONResponse(content=SessionConfig.model_json_schema())
+
+    @mcp.custom_route(
+        "/mcp",
+        methods=["GET"]
+    )
+    async def mcp_endpoint(request: Request) -> JSONResponse:
+        """MCP endpoint for Smithery playground configuration."""
+        return JSONResponse(content={
+            "status": "ok",
+            "message": "MCP server is running",
+            "server": "OpenBB MCP Server"
+        })
 
     # Add system prompt if configured
     if settings.system_prompt_file:
@@ -518,9 +532,9 @@ class SSEShutdownWrapper:
             await self.asgi_app(scope, receive, send)
             return
 
-        # Check if this is an SSE endpoint
+        # Check if this is an SSE or MCP endpoint
         path = scope.get("path", "")
-        if not path.endswith("/sse/"):
+        if not (path.endswith("/sse/") or path == "/mcp" or path.startswith("/mcp/")):
             await self.asgi_app(scope, receive, send)
             return
 
@@ -616,13 +630,22 @@ def main():
         # Create MCP server with comprehensive configuration
         mcp_server = create_mcp_server(settings, target_app, httpx_kwargs)
 
+        # Add FastMCP middleware to the server instance
+        if getattr(settings, "forward_bearer_enabled", True):
+            mcp_server.add_middleware(ForwardAuthMiddleware())
+        _build_smithery_middleware(settings, mcp_server)
+
+        # Add built-in FastMCP middleware for better error handling
+        mcp_server.add_middleware(ErrorHandlingMiddleware(
+            include_traceback=True,
+            transform_errors=True
+        ))
+
         if args.transport == "stdio":
             asyncio.run(stdio_main(mcp_server))
         else:
+            # Only apply ASGI middleware for HTTP-specific concerns (CORS, etc.)
             cors_middleware = _build_runtime_middleware(settings)
-
-            # Optionally add Smithery middleware on top of standard CORS
-            cors_middleware.extend(_build_smithery_middleware(settings))
 
             # For HTTP transports, extract host/port from uvicorn_config and pass directly
             run_kwargs = {

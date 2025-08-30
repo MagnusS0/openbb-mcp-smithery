@@ -1,15 +1,16 @@
-"""Middleware that captures Authorization headers for token forwarding."""
+"""FastMCP middleware that captures Authorization headers for token forwarding."""
 
 from __future__ import annotations
 
 from typing import Optional
 
-from starlette.types import ASGIApp, Receive, Scope, Send
+from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from openbb_mcp_server.security.context import clear_bearer_token, set_bearer_token
 
 
 def _extract_bearer_from_headers(headers: list[tuple[bytes, bytes]]) -> Optional[str]:
+    """Extract bearer token from HTTP headers."""
     auth_value: Optional[str] = None
     x_pat: Optional[str] = None
     pat_alt: Optional[str] = None
@@ -34,28 +35,29 @@ def _extract_bearer_from_headers(headers: list[tuple[bytes, bytes]]) -> Optional
     return None
 
 
-class ForwardAuthMiddleware:
-    """ASGI middleware to capture bearer token for downstream forwarding."""
+class ForwardAuthMiddleware(Middleware):
+    """FastMCP middleware to capture bearer token for downstream forwarding."""
 
-    def __init__(self, app: ASGIApp):
-        self.app = app
+    async def on_message(self, context: MiddlewareContext, call_next):
+        """Extract and set bearer token for all MCP messages."""
+        # Extract token from HTTP headers if available
+        if (context.fastmcp_context and
+            hasattr(context.fastmcp_context, 'request') and
+            context.fastmcp_context.request):
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope.get("type") != "http":
-            await self.app(scope, receive, send)
-            return
-
-        headers: list[tuple[bytes, bytes]] = scope.get("headers", [])  # type: ignore[assignment]
-        token = _extract_bearer_from_headers(headers or [])
-        set_bearer_token(token)
-
-        async def _send(message):
-            if message.get("type") in {"http.response.body", "http.response.start"}:
-                # Clear token at the start of response to avoid leaking across requests
-                clear_bearer_token()
-            return await send(message)
+            request = context.fastmcp_context.request
+            if hasattr(request, 'headers'):
+                headers = []
+                for key, value in request.headers.items():
+                    headers.append((key.encode('latin-1'), value.encode('latin-1')))
+                token = _extract_bearer_from_headers(headers)
+                if token:
+                    set_bearer_token(token)
 
         try:
-            await self.app(scope, receive, _send)
+            # Continue with the request
+            result = await call_next(context)
+            return result
         finally:
+            # Clear token after request completes to avoid leaking across requests
             clear_bearer_token()

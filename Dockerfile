@@ -43,6 +43,6 @@ ENV OPENBB_API_AUTH=true \
 
 # Entrypoint: run MCP in HTTP mode on port 8080 with discovery disabled by default
 # Users provide PAT via Authorization header; Smithery can inject via config param
-CMD ["openbb-mcp", "--host", "0.0.0.0", "--port", "8080", "--no-tool-discovery"]
+CMD ["openbb-mcp", "--host", "0.0.0.0", "--port", "8080", "--no-tool-discovery", "--allowed-categories", "equity", "--default-categories", "equity"]
 
 
