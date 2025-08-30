@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class SessionConfig(BaseModel):
     """Smithery session configuration model."""
 
+    model_config = {"title": "configSchema"}
     apiKey: str = Field(
         ..., title="Personal Access Token (PAT)", description="Required OpenBB PAT used to authenticate requests")
 
