@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastmcp import FastMCP
 from fastmcp.prompts.prompt import FunctionPrompt, PromptArgument, PromptResult
-from fastmcp.server.middleware import Middleware as FastMCPMiddleware
 from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
 from fastmcp.server.openapi import (
     OpenAPIResource,
@@ -49,9 +48,7 @@ def _extract_brief_description(full_description: str) -> str:
     """Extract only the brief description before the detailed API documentation."""
     if not full_description:
         return "No description available"
-    brief, *_ = re.split(
-        r"\n{2,}\*\*(?:Query Parameters|Responses):", full_description, maxsplit=1
-    )
+    brief, *_ = re.split(r"\n{2,}\*\*(?:Query Parameters|Responses):", full_description, maxsplit=1)
     return brief.strip() or "No description available"
 
 
@@ -74,9 +71,7 @@ def _strip_api_prefix(path: str, api_prefix: str) -> str:
         return ""
     if not path.startswith("/"):
         path = "/" + path
-    remainder = (
-        path[len(api_prefix) :] if api_prefix and path.startswith(api_prefix) else path
-    )
+    remainder = path[len(api_prefix) :] if api_prefix and path.startswith(api_prefix) else path
     return remainder.lstrip("/")
 
 
@@ -129,7 +124,8 @@ def _build_smithery_middleware(settings: MCPSettings, mcp_server: FastMCP) -> No
     The middleware will parse session configuration from query parameters and
     update the MCPService runtime session config.
     """
-    if not getattr(settings, "smithery_enabled", False):
+    smithery_enabled = getattr(settings, "smithery_enabled", False)
+    if not smithery_enabled:
         return
 
     mcp_service = MCPService()
@@ -142,9 +138,7 @@ def _build_smithery_middleware(settings: MCPSettings, mcp_server: FastMCP) -> No
 
 
 # pylint: disable=R0915
-def create_mcp_server(
-    settings: MCPSettings, fastapi_app: FastAPI, httpx_kwargs: dict | None = None
-):
+def create_mcp_server(settings: MCPSettings, fastapi_app: FastAPI, httpx_kwargs: dict | None = None):
     """Create and configure the MCP server with efficient single-pass route processing."""
     tool_registry = ToolRegistry()
 
@@ -212,11 +206,7 @@ def create_mcp_server(
         if name := mcp_cfg.get("name"):
             component.name = name
         else:
-            component.name = (
-                f"{category}_{subcategory}_{tool}"
-                if subcategory != "general"
-                else f"{category}_{tool}"
-            )
+            component.name = f"{category}_{subcategory}_{tool}" if subcategory != "general" else f"{category}_{tool}"
 
         # Tags
         component.tags.add(category)
@@ -235,12 +225,8 @@ def create_mcp_server(
 
         # Description trimming
         describe_override = mcp_cfg.get("describe_responses")
-        if describe_override is False or (
-            describe_override is None and not settings.describe_responses
-        ):
-            component.description = _extract_brief_description(
-                component.description or ""
-            )
+        if describe_override is False or (describe_override is None and not settings.describe_responses):
+            component.description = _extract_brief_description(component.description or "")
 
         # Add prompt metadata to the tool description
         if isinstance(component, OpenAPITool):
@@ -253,9 +239,7 @@ def create_mcp_server(
                         prompt_metadata_str += "\n  - Arguments: " + ", ".join(
                             [f"`{arg['name']}`" for arg in p["arguments"]]
                         )
-                component.description = (
-                    component.description or ""
-                ) + prompt_metadata_str
+                component.description = (component.description or "") + prompt_metadata_str
 
         # Enable/disable: per-route override first, then category defaults
         enable_override = mcp_cfg.get("enable")
@@ -265,8 +249,7 @@ def create_mcp_server(
             else:
                 component.disable()
         elif "all" in settings.default_tool_categories or any(
-            tag in settings.default_tool_categories
-            for tag in getattr(component, "tags", set())
+            tag in settings.default_tool_categories for tag in getattr(component, "tags", set())
         ):
             component.enable()
         else:
@@ -316,25 +299,15 @@ def create_mcp_server(
     from fastapi import Request
     from fastapi.responses import JSONResponse
 
-    @mcp.custom_route(
-        "/.well-known/mcp-config",
-        methods=["GET"]
-    )
+    @mcp.custom_route("/.well-known/mcp-config", methods=["GET"])
     async def smithery_config(request: Request) -> JSONResponse:
         """MCP config endpoint handler."""
         return JSONResponse(content=SessionConfig.model_json_schema())
 
-    @mcp.custom_route(
-        "/mcp",
-        methods=["GET"]
-    )
+    @mcp.custom_route("/mcp", methods=["GET"])
     async def mcp_endpoint(request: Request) -> JSONResponse:
         """MCP endpoint for Smithery playground configuration."""
-        return JSONResponse(content={
-            "status": "ok",
-            "message": "MCP server is running",
-            "server": "OpenBB MCP Server"
-        })
+        return JSONResponse(content={"status": "ok", "message": "MCP server is running", "server": "OpenBB MCP Server"})
 
     # Add system prompt if configured
     if settings.system_prompt_file:
@@ -422,9 +395,7 @@ def create_mcp_server(
 
         @mcp.tool(tags={"admin"})
         def available_tools(
-            category: Annotated[
-                str, Field(description="The category of tools to list")
-            ],
+            category: Annotated[str, Field(description="The category of tools to list")],
             subcategory: Annotated[
                 str | None,
                 Field(
@@ -437,9 +408,7 @@ def create_mcp_server(
             if not category_data:
                 available_categories_names = list(tool_registry.get_categories().keys())
                 categories_str = ", ".join(sorted(available_categories_names))
-                raise ValueError(
-                    f"Category '{category}' not found. Available categories: {categories_str}"
-                )
+                raise ValueError(f"Category '{category}' not found. Available categories: {categories_str}")
 
             if subcategory:
                 tools_dict = tool_registry.get_category_tools(category, subcategory)
@@ -471,18 +440,14 @@ def create_mcp_server(
 
         @mcp.tool(tags={"admin"})
         def activate_tools(
-            tool_names: Annotated[
-                list[str], Field(description="Names of tools to activate")
-            ],
+            tool_names: Annotated[list[str], Field(description="Names of tools to activate")],
         ) -> str:
             """Activate a tool for use."""
             return tool_registry.toggle_tools(tool_names, enable=True).message
 
         @mcp.tool(tags={"admin"})
         def deactivate_tools(
-            tool_names: Annotated[
-                list[str], Field(description="Names of tools to deactivate")
-            ],
+            tool_names: Annotated[list[str], Field(description="Names of tools to deactivate")],
         ) -> str:
             """Deactivate a tool for use."""
             return tool_registry.toggle_tools(tool_names, enable=False).message
@@ -494,26 +459,19 @@ def create_mcp_server(
         """List all available prompts."""
         prompts = await mcp.get_prompts()
 
-        return [
-            {"name": p.name, "tags": p.tags, "arguments": p.arguments}
-            for p in prompts.values()
-        ]
+        return [{"name": p.name, "tags": p.tags, "arguments": p.arguments} for p in prompts.values()]
 
     @mcp.tool(tags={"prompt"})
     async def execute_prompt(
-        prompt_name: Annotated[
-            str, Field(description="The name of the prompt to execute.")
-        ],
+        prompt_name: Annotated[str, Field(description="The name of the prompt to execute.")],
         arguments: Annotated[
             dict,
             Field(description="The arguments for the prompt.", default_factory=dict),
         ],
     ) -> PromptResult:
         """Execute a prompt by name."""
-        return (
-            await mcp._prompt_manager.render_prompt(  # pylint: disable=protected-access
-                name=prompt_name, arguments=arguments
-            )
+        return await mcp._prompt_manager.render_prompt(  # pylint: disable=protected-access
+            name=prompt_name, arguments=arguments
         )  # type: ignore
 
     return mcp
@@ -631,15 +589,14 @@ def main():
         mcp_server = create_mcp_server(settings, target_app, httpx_kwargs)
 
         # Add FastMCP middleware to the server instance
+        # IMPORTANT: SmitheryConfigMiddleware must run BEFORE ForwardAuthMiddleware
+        # so that config is parsed and stored before auth middleware tries to use it
+        _build_smithery_middleware(settings, mcp_server)
         if getattr(settings, "forward_bearer_enabled", True):
             mcp_server.add_middleware(ForwardAuthMiddleware())
-        _build_smithery_middleware(settings, mcp_server)
 
         # Add built-in FastMCP middleware for better error handling
-        mcp_server.add_middleware(ErrorHandlingMiddleware(
-            include_traceback=True,
-            transform_errors=True
-        ))
+        mcp_server.add_middleware(ErrorHandlingMiddleware(include_traceback=True, transform_errors=True))
 
         if args.transport == "stdio":
             asyncio.run(stdio_main(mcp_server))

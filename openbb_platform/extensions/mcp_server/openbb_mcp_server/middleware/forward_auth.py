@@ -40,19 +40,47 @@ class ForwardAuthMiddleware(Middleware):
 
     async def on_message(self, context: MiddlewareContext, call_next):
         """Extract and set bearer token for all MCP messages."""
-        # Extract token from HTTP headers if available
-        if (context.fastmcp_context and
-            hasattr(context.fastmcp_context, 'request') and
-            context.fastmcp_context.request):
+        token = None
 
+        # Extract token from HTTP headers if available
+        request = None
+
+        # Try multiple ways to access the HTTP request
+        if (
+            hasattr(context, "fastmcp_context")
+            and context.fastmcp_context
+            and hasattr(context.fastmcp_context, "request")
+            and context.fastmcp_context.request
+        ):
             request = context.fastmcp_context.request
-            if hasattr(request, 'headers'):
-                headers = []
-                for key, value in request.headers.items():
-                    headers.append((key.encode('latin-1'), value.encode('latin-1')))
-                token = _extract_bearer_from_headers(headers)
-                if token:
-                    set_bearer_token(token)
+
+        if not request:
+            try:
+                from fastmcp.server.dependencies import get_http_request
+
+                request = get_http_request()
+            except Exception:
+                pass
+
+        if request and hasattr(request, "headers"):
+            headers = []
+            for key, value in request.headers.items():
+                headers.append((key.encode("latin-1"), value.encode("latin-1")))
+            token = _extract_bearer_from_headers(headers)
+
+        # If no token from headers, check runtime session config (for Smithery)
+        if not token:
+            try:
+                from openbb_mcp_server.service.mcp_service import MCPService
+
+                mcp_service = MCPService()
+                session_config = mcp_service.runtime_session_config
+                token = session_config.get("apiKey")
+            except Exception:
+                pass
+
+        if token:
+            set_bearer_token(token)
 
         try:
             # Continue with the request
